@@ -11,7 +11,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## Denver Crime Data
 
-The city of Denver provides data on various types of crime in the city. As of September 18, 2018, this includes datasets for crime, hate crime, and marijuana-related crime. In addition, data on police pedestrian stops is provided. These datasets can be accessed at the URLs listed below.
+The city of Denver provides data on various types of crime in the city. As of September 18, 2018, this includes datasets for crime, hate crime, and marijuana-related crime. In addition, data on police pedestrian stops is provided. These datasets can be used to answer some interesting questions, such as which neighborhoods suffer from specific types of crime, or which types of crime might occur in the same location. These datasets can be accessed at the URLs listed below.
 
 https://www.denvergov.org/opendata/dataset/city-and-county-of-denver-crime
 
@@ -114,7 +114,7 @@ m <- leaflet(data=transformCoords(xy)) %>%
 m
 ```
 
-Map of anti-semitic hate crimes:
+Map of anti-Semitic hate crimes:
 
 ```{r anti-jewish}
 data_jewish <- data %>% filter(Bias.Type == "ANTI-JEWISH")
@@ -183,7 +183,31 @@ data <- read.csv("crime.csv")
 summary(data["OFFENSE_CATEGORY_ID"])
 ```
 
-The dataset includes latitude and longitude, so no conversion between coordinate systems is necessary. Since the dataset is so large, only the first 10,000 valid entries will be mapped.
+The data includes the neighborhood in which each crime was committed.
+
+```{r crime_neighborhood}
+summary(data["NEIGHBORHOOD_ID"])
+```
+
+Note that Montbello and Five-Points appeared in the list of top locations for marijuana crime as well.
+
+The data include a lot of traffic incidents which may not be considered crimes. These are filtered out below.
+
+```{r crime_traffic}
+print(nrow(data))
+data <- data %>%
+    filter(IS_CRIME == 1)
+print(nrow(data))
+```
+
+The "OFFENSE_TYPE_ID" provides more detail on what crime was committed than the "OFFENSE_CATEGORY_ID". For example, the frequencies of different types of larceny can be viewed.
+
+```{r crime_larceny}
+data_larceny <- data %>% filter(OFFENSE_CATEGORY_ID == "larceny")
+summary(data_larceny["OFFENSE_TYPE_ID"])
+```
+
+The dataset includes latitude and longitude, so no conversion between coordinate systems is necessary to map the data. Since the dataset is so large, only the first 10,000 valid crime entries will be mapped.
 
 ```{r crime_map}
 xy <- data[c("GEO_LON", "GEO_LAT")]
@@ -195,4 +219,52 @@ m <- leaflet(data=xy) %>%
 m
 ```
 
-Hopefully this report provides a decent example of how Denver's open crime data can be mapped. At present, it is still a challenge to integrate this data with similar crime data from the suburbs.
+Seeing the time difference between reporting of the crime and occurrence of the crime (in days) may be of interest.
+
+```{r crime_dates}
+library(lubridate)
+data_timing <- data %>%
+            mutate(REP_OCC_DIFF = as.duration(mdy_hms(REPORTED_DATE)-
+                     mdy_hms(FIRST_OCCURRENCE_DATE))/ddays(1))
+print(head(data_timing["REP_OCC_DIFF"]))
+summary(data_timing["REP_OCC_DIFF"])
+```
+
+## Denver Police Stops Dataset
+
+A fourth crime dataset provided by the Denver Open Data Catalog provides information on police stops of pedestrians and vehicles. This dataset is about as large as the crime dataset.
+
+```{r police_stops}
+data <- read.csv("police_pedestrian_stops_and_vehicle_stops.csv")
+summary(data["PROBLEM"])
+```
+
+Once again, the neighborhoods can be viewed.
+
+```{r police_stops_neighborhoods}
+summary(data["NEIGHBORHOOD_NAME"])
+```
+
+Five-Points, Montbello, and Stapleton appear again.
+
+The number of arrests made can be determined through the call_disposition.
+
+```{r police_stops_arrests}
+arrests <- data %>% filter(CALL_DISPOSITION == "Arrest Made")
+nrow(arrests)
+```
+
+What period of time does the dataset cover?
+
+```{r police_stops_dates}
+data <- data %>% mutate(DATES = ymd_hms(TIME_PHONEPICKUP))
+data <- data %>% arrange(DATES)
+print(head(data["DATES"]))
+print(tail(data["DATES"]))
+```
+
+Like the crime dataset, this dataset includes the latitude and longitude of incidents so no conversion from the state plane system is necessary. They aren't mapped here because the dataset is so large, but the process of mapping this data would be similar to mapping the crime dataset.
+
+## Conclusion
+
+Hopefully this report provides a decent example of how Denver's open crime data can be mapped. At present, it is still a challenge to integrate this data with similar crime data from the suburbs. This was only exploratory data analysis, hopefully it can provide a basis for more in depth analysis. The data from these datasets could be used together with population data to provide a view of per-capita crime.
