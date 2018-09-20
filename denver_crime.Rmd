@@ -1,0 +1,198 @@
+---
+title: "Denver Crime Visualization"
+author: "cyorir"
+date: "September 18, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Denver Crime Data
+
+The city of Denver provides data on various types of crime in the city. As of September 18, 2018, this includes datasets for crime, hate crime, and marijuana-related crime. In addition, data on police pedestrian stops is provided. These datasets can be accessed at the URLs listed below.
+
+https://www.denvergov.org/opendata/dataset/city-and-county-of-denver-crime
+
+https://www.denvergov.org/opendata/dataset/hate-crimes
+
+https://www.denvergov.org/opendata/dataset/city-and-county-of-denver-crime-marijuana
+
+https://www.denvergov.org/opendata/dataset/city-and-county-of-denver-police-pedestrian-stops-and-vehicle-stops
+
+## Denver Hate Crime Dataset
+
+The hate crimes data set provides information about hate crimes recorded by the Denver Police Department. This includes information about the location of the crime and the type of hate crime. The data indicate the relative frequency of different types of hate crime in Denver.
+
+```{r bias_types}
+data <- read.csv("BiasMotivatedCrimes.csv")
+summary(data["Bias.Type"])
+```
+Other summaries might be interesting, including location description and offense description.
+
+```{r loc_off}
+print(summary(data["OFFENSE_DESC"]))
+summary(data["Location_Description"])
+```
+
+The data can be mapped to show where in Denver hate crimes occur. Since the X and Y coordinates are in a state plane coordinate system, they must first be mapped to latitude and longitude so that they can be plotted.
+
+```{r hc_transform}
+library("rgdal")
+transformCoords <- function(xy) {
+  colnames(xy) <- c("x","y")
+  x <- xy["x"][!is.na(xy["x"])]
+  #note that for this dataset either both x and y
+  #are present or both are missing
+  y <- xy["y"][!is.na(xy["x"])]
+  xy <- data.frame(cbind(x,y))
+  xy <- SpatialPoints(xy, CRS("+init=EPSG:3502"))
+  proj4string <- "+init=epsg:4326"
+  pj <- spTransform(xy,proj4string)
+  latlon <- data.frame(lat=pj$y, lon=pj$x)
+  latlon
+}
+xy <- data[c("X_COORDINATE", "Y_COORDINATE")]
+head(transformCoords(xy))
+```
+
+Now that the approximate latitude and longitude are available for each crime, the crimes can be mapped over the city of Denver. 
+
+```{r hc_map}
+library(leaflet)
+m <- leaflet(data=transformCoords(xy)) %>%
+  addTiles() %>%
+  addMarkers(~lon,~lat, clusterOptions = markerClusterOptions())
+m
+```
+
+Note that data for the suburbs are not included, and each marker represents a nearby block rather than the precise location of the crime. The data can be mapped for a specific type of offense. In this case, the data for hate graffiti is mapped.
+
+```{r graffiti}
+library(dplyr)
+data_graffiti <- data %>% filter(OFFENSE_DESC == "CRIMINAL MISCHIEF - GRAFFITI")
+xy <- data_graffiti[c("X_COORDINATE", "Y_COORDINATE")]
+m <- leaflet(data=transformCoords(xy)) %>%
+  addTiles() %>%
+  addMarkers(~lon,~lat, clusterOptions = markerClusterOptions())
+m
+```
+
+The data for different types of bias may also be mapped.
+
+Map of anti-black hate crimes:
+
+```{r anti-black}
+data_black <- data %>% filter(Bias.Type == "ANTI-BLACK")
+xy <- data_black[c("X_COORDINATE", "Y_COORDINATE")]
+m <- leaflet(data=transformCoords(xy)) %>%
+  addTiles() %>%
+  addMarkers(~lon,~lat, clusterOptions = markerClusterOptions())
+m
+```
+
+Map of anti-white hate crimes:
+
+```{r anti-white}
+data_white <- data %>% filter(Bias.Type == "ANTI-WHITE")
+xy <- data_white[c("X_COORDINATE", "Y_COORDINATE")]
+m <- leaflet(data=transformCoords(xy)) %>%
+  addTiles() %>%
+  addMarkers(~lon,~lat, clusterOptions = markerClusterOptions())
+m
+```
+
+Map of anti-hispanic hate crimes:
+
+```{r anti-hispanic}
+data_hispanic <- data %>% filter(Bias.Type == "ANTI-HISPANIC")
+xy <- data_hispanic[c("X_COORDINATE", "Y_COORDINATE")]
+m <- leaflet(data=transformCoords(xy)) %>%
+  addTiles() %>%
+  addMarkers(~lon,~lat, clusterOptions = markerClusterOptions())
+m
+```
+
+Map of anti-semitic hate crimes:
+
+```{r anti-jewish}
+data_jewish <- data %>% filter(Bias.Type == "ANTI-JEWISH")
+xy <- data_jewish[c("X_COORDINATE", "Y_COORDINATE")]
+m <- leaflet(data=transformCoords(xy)) %>%
+  addTiles() %>%
+  addMarkers(~lon,~lat, clusterOptions = markerClusterOptions())
+m
+```
+
+Note that each type of bias follows a different distribution. Also note that this only considers crimes attributed to a single type of bias.
+
+Hopefully this provides an example of how Denver's open data can be used.
+
+## Denver Marijuana Crime Dataset
+
+Marijuana has been a hot topic in Colorado since Amendment 64 was passed, legalizing the recreational use of marijuana. Denver now provides open data about marijuana-related crimes. Crimes are separated into industry and non-industry crimes. These are explained as follows: "Industry-related crimes involve marijuana and licensed marijuana facilities. These reported crimes are committed against the licensed industry or by the industry itself. Non-Industry crimes are crimes reported where marijuana is the primary target in the commission of these crime but the marijuana has no readily apparent tie to a licensed operation." 
+
+```{r marijuana}
+data <- read.csv("crime_marijuana.csv")
+summary(data["MJ_RELATION_TYPE"])
+```
+
+Data about the type of offense is also included. Burglary is by far the most common type of offense.
+
+```{r mj_offenses}
+summary(data["OFFENSE_CATEGORY_ID"])
+```
+
+Crimes can be grouped by neighborhood.
+
+```{r mj_neighborhoods}
+summary(data["NEIGHBORHOOD_ID"])
+```
+
+The dataset includes the coordinates of the crimes. As with the hate crimes dataset, the coordinates must be transformed from the state plane coordinate system to latitude and longitude. Marijuana-related burglaries are mapped.
+
+```{r mj_burglary}
+data_burglary <- data %>% filter(OFFENSE_CATEGORY_ID == "Burglary")
+xy <- data_burglary[c("GEO_X", "GEO_Y")]
+m <- leaflet(data=transformCoords(xy)) %>%
+  addTiles() %>%
+  addMarkers(~lon,~lat, clusterOptions = markerClusterOptions())
+m
+```
+
+There is also the map of all other marijuana-related crimes.
+
+```{r mj_other}
+data_burglary <- data %>% filter(OFFENSE_CATEGORY_ID != "Burglary")
+xy <- data_burglary[c("GEO_X", "GEO_Y")]
+m <- leaflet(data=transformCoords(xy)) %>%
+  addTiles() %>%
+  addMarkers(~lon,~lat, clusterOptions = markerClusterOptions())
+m
+```
+
+Note that the two maps have a similar distribution.
+
+## Denver Crime Dataset
+
+The Denver Open Data Catalog includes a dataset for crime in general. This dataset is much larger and more comprehensive than either the hate crime dataset or marijuana crime datasets.
+
+```{r crime}
+data <- read.csv("crime.csv")
+summary(data["OFFENSE_CATEGORY_ID"])
+```
+
+The dataset includes latitude and longitude, so no conversion between coordinate systems is necessary. Since the dataset is so large, only the first 10,000 valid entries will be mapped.
+
+```{r crime_map}
+xy <- data[c("GEO_LON", "GEO_LAT")]
+xy <- xy %>% filter(!is.na(GEO_LON)) %>% filter(!is.na(GEO_LAT)) %>% filter(GEO_LON < -100)
+xy <- head(xy, 10000)
+m <- leaflet(data=xy) %>%
+  addTiles() %>%
+  addMarkers(~GEO_LON,~GEO_LAT, clusterOptions = markerClusterOptions())
+m
+```
+
+Hopefully this report provides a decent example of how Denver's open crime data can be mapped. At present, it is still a challenge to integrate this data with similar crime data from the suburbs.
